@@ -841,7 +841,14 @@ class SheetDB_ {
             [key] in this.schema[latestSheetName] &&
             this.schema[latestSheetName][key]['dataType'].match(/enumlist|set/i)
           ) {
-            newValue = setData[key].join(' , ');
+            // 重複を許可しない。(set型)
+            if (/set/i.test(this.schema[latestSheetName][key]['dataType'])) {
+              newValue = [...new Set(setData[key])].join(' , ');
+              // 重複を許可(enumlist型)
+            } else {
+              newValue = setData[key].join(' , ');
+            }
+
             if (oldValue === newValue) {
               continue setValueLoop;
             } else {
