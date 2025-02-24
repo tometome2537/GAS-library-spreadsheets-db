@@ -2,7 +2,7 @@
 
 【ライブラリ】スプシを DB として扱えるように
 
-aside に内包される clasp の使い方
+clasp の使い方
 https://tometome.notion.site/clasp-GAS-CUI-40d13cecdd7c4292bb9c0aabdfadf600
 
 本番環境 GAS ファイル

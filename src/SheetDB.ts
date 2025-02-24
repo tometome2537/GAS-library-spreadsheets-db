@@ -38,11 +38,10 @@ export default class SheetDB_ {
   _spreadSheet: GoogleAppsScript.Spreadsheet.Spreadsheet | null;
   _cacheSheetAllSheet: Record<string, GoogleAppsScript.Spreadsheet.Sheet>;
   _cacheSheetValuesAllSheet: Record<string, any[]>;
-  _cacheSheetObj: Record<string, any>;
+  _cacheSheetObj: Record<string, any[]>;
   _ySetValueAppEndRow: Record<string, number>;
   _cacheUniqueKeyDone: string[];
   _cacheUniqueKeyValues: Record<string, Record<string, any[]>>;
-  _targetCoordinate: any;
   // コンストラクタ
   constructor(spreadSheetId: string | null) {
     // スプシID初期値
@@ -109,9 +108,8 @@ export default class SheetDB_ {
   get spreadSheetId(): string {
     if (this._spreadSheetId) {
       return this._spreadSheetId;
-    } else {
-      throw "読み込むスプシIDが定義されていません。";
     }
+    throw "読み込むスプシIDが定義されていません。";
   }
 
   /** スプシファイルを取得 */
@@ -119,11 +117,10 @@ export default class SheetDB_ {
     if (this._spreadSheet) {
       // キャッシュが保存されている場合。
       return this._spreadSheet;
-    } else {
-      const spreadSheet = SpreadsheetApp.openById(this.spreadSheetId);
-      this._spreadSheet = spreadSheet;
-      return spreadSheet;
     }
+    const spreadSheet = SpreadsheetApp.openById(this.spreadSheetId);
+    this._spreadSheet = spreadSheet;
+    return spreadSheet;
   }
 
   /** シート名を一覧を取得 */
@@ -135,7 +132,7 @@ export default class SheetDB_ {
     // メタデータシートが存在しない場合は
     if (!this.getSheetNames().includes(this._metaDataSheetName)) {
       // シートの作成。
-      let newSheet = this.spreadSheet.insertSheet(this._metaDataSheetName);
+      const newSheet = this.spreadSheet.insertSheet(this._metaDataSheetName);
       newSheet.appendRow(["key", "value"]);
       // シートをアクティベート。
       this.spreadSheet.setActiveSheet(newSheet);
@@ -172,22 +169,21 @@ export default class SheetDB_ {
     historySheetKeyName: Record<string, HistorySheetKeyName>
   ) {
     if (this._historySheetKeyName) {
-      throw `シート・キー履歴が再度設定されようとしています。`;
-    } else {
-      // 値をmetaDataシートに保存する。(ただし既存の値を変更点がない場合は何もしない。)
-      const metaDataSheet = this.spreadSheet.getSheetByName(
-        this.metaDataSheetName
-      );
-      const cellData = metaDataSheet.getRange("B3").getValue();
-      if (JSON.stringify(historySheetKeyName) !== cellData) {
-        metaDataSheet.getRange("A3").setValue("historySheetKeyName");
-        metaDataSheet
-          .getRange("B3")
-          .setValue(JSON.stringify(historySheetKeyName));
-      }
-      // classプロパティに保存
-      this._historySheetKeyName = historySheetKeyName;
+      throw "シート・キー履歴が再度設定されようとしています。";
     }
+    // 値をmetaDataシートに保存する。(ただし既存の値を変更点がない場合は何もしない。)
+    const metaDataSheet = this.spreadSheet.getSheetByName(
+      this.metaDataSheetName
+    );
+    const cellData = metaDataSheet.getRange("B3").getValue();
+    if (JSON.stringify(historySheetKeyName) !== cellData) {
+      metaDataSheet.getRange("A3").setValue("historySheetKeyName");
+      metaDataSheet
+        .getRange("B3")
+        .setValue(JSON.stringify(historySheetKeyName));
+    }
+    // classプロパティに保存
+    this._historySheetKeyName = historySheetKeyName;
   }
   // シート名・キー名変更履歴を呼び出し。
   get historySheetKeyName(): Record<string, HistorySheetKeyName> {
@@ -211,9 +207,9 @@ export default class SheetDB_ {
     for (const historySheetName in this.historySheetKeyName) {
       if ("sheetNameHistory" in this.historySheetKeyName[historySheetName]) {
         if (
-          this.historySheetKeyName[historySheetName][
-            "sheetNameHistory"
-          ].includes(sheetName)
+          this.historySheetKeyName[historySheetName].sheetNameHistory.includes(
+            sheetName
+          )
         ) {
           return historySheetName;
         }
@@ -232,9 +228,9 @@ export default class SheetDB_ {
       if ("keyNameHistory" in this.historySheetKeyName[latestSheetName]) {
         // keyNameHistoryの項目があるかどうか
         if (
-          keyName in this.historySheetKeyName[latestSheetName]["keyNameHistory"]
+          keyName in this.historySheetKeyName[latestSheetName].keyNameHistory
         ) {
-          return this.historySheetKeyName[latestSheetName]["keyNameHistory"][
+          return this.historySheetKeyName[latestSheetName].keyNameHistory[
             keyName
           ];
         }
@@ -255,13 +251,12 @@ export default class SheetDB_ {
     if (latestSheetName in this._cacheSheetAllSheet) {
       // キャッシュに保存されている場合
       return this._cacheSheetAllSheet[latestSheetName];
-    } else {
-      // キャッシュに保存されていない場合
-      const sheet = this.spreadSheet.getSheetByName(latestSheetName);
-      // キャッシュに保存
-      this._cacheSheetAllSheet[latestSheetName] = sheet;
-      return sheet;
     }
+    // キャッシュに保存されていない場合
+    const sheet = this.spreadSheet.getSheetByName(latestSheetName);
+    // キャッシュに保存
+    this._cacheSheetAllSheet[latestSheetName] = sheet;
+    return sheet;
   }
 
   // シートの値①(関数の結果)を読み込む
@@ -351,12 +346,12 @@ export default class SheetDB_ {
       // ⭐️ここからスキーマの通りに変換
       if (schema) {
         // スキーマが定義されている場合
-        for (let item of sheetObj) {
+        for (const item of sheetObj) {
           for (const key in schema) {
             // 定義を繰り返す
             if ("dataType" in schema[key]) {
               // BigInt型の場合 桁数の多い数字は文字型として出力する。デフォルトで桁数が多い数値は文字列としてスプシ(GAS)は扱っている。
-              if (schema[key]["dataType"].match(/bigint/i)) {
+              if (schema[key].dataType.match(/bigint/i)) {
                 if (typeof item[key] === "number") {
                   // 桁数の少ない数値は数値型なので統一させるために文字型として出力する。
                   item[key] = String(item[key]);
@@ -367,17 +362,17 @@ export default class SheetDB_ {
                 }
 
                 // 数値型の場合
-              } else if (schema[key]["dataType"].match(/int/i)) {
+              } else if (schema[key].dataType.match(/int/i)) {
                 // 空文字をNumber()すると0になってしまう。 undefinedを返すとJSON.stringify()でkeyが削除されてしまうためnullを返す。
                 if (item[key] === "" || item[key] === null) {
                   // nullはNaNに変換
-                  item[key] = NaN;
+                  item[key] = Number.NaN;
                 } else {
                   item[key] = Number(item[key]);
                 }
               }
               // jsonの場合
-              if (schema[key]["dataType"].match(/json/i)) {
+              if (schema[key].dataType.match(/json/i)) {
                 try {
                   item[key] = JSON.parse(item[key]);
                 } catch {
@@ -385,7 +380,7 @@ export default class SheetDB_ {
                 }
               }
               // Bool型の場合
-              if (schema[key]["dataType"].match(/bool|boolen|boolean/i)) {
+              if (schema[key].dataType.match(/bool|boolen|boolean/i)) {
                 if (item[key] === null || item[key] === "") {
                   item[key] = null;
                 } else if (/^(true|yes|1)$/i.test(item[key])) {
@@ -397,7 +392,7 @@ export default class SheetDB_ {
                 }
               }
               // date型の場合
-              if (schema[key]["dataType"].match(/date/i)) {
+              if (schema[key].dataType.match(/date/i)) {
                 item[key] = new Date(item[key]);
                 if (item[key].toString() === "Invalid Date") {
                   // 日付に変換できなかった場合はnull
@@ -405,11 +400,11 @@ export default class SheetDB_ {
                 }
               }
               // enumList(重複が許される)の場合
-              if (schema[key]["dataType"].match(/enumlist|set/i)) {
+              if (schema[key].dataType.match(/enumlist|set/i)) {
                 if (typeof item[key] === "string" && item[key].length >= 1) {
                   item[key] = item[key].split(/ , |,| ,|, /).filter((v) => v);
                   // Set型(重複が許されない)
-                  if (schema[key]["dataType"].match(/set/i)) {
+                  if (schema[key].dataType.match(/set/i)) {
                     item[key] = item[key].filter(
                       (item, index, self) => self.indexOf(item) === index
                     );
@@ -420,7 +415,7 @@ export default class SheetDB_ {
               }
 
               // String型の扱い
-              if (schema[key]["dataType"].match(/string/i)) {
+              if (schema[key].dataType.match(/string/i)) {
                 if (typeof item[key] === "string" && item[key].length >= 1) {
                   // １文字以上の文字列なら文字型に変換
                   item[key] = String(item[key]);
@@ -428,16 +423,14 @@ export default class SheetDB_ {
                   // それ以外はnull
                   item[key] = null;
                 }
-              } else {
-                item[key] = item[key];
               }
             }
           }
         }
       }
       // デフォルトはnullにする。
-      for (let sheetObjItem of sheetObj) {
-        for (let sheetObjItemKey in sheetObjItem) {
+      for (const sheetObjItem of sheetObj) {
+        for (const sheetObjItemKey in sheetObjItem) {
           // デフォルトはnull
           if (sheetObjItem[sheetObjItemKey] === "") {
             sheetObjItem[sheetObjItemKey] = null;
@@ -466,7 +459,7 @@ export default class SheetDB_ {
       );
 
       // yの値のみを配列にする。
-      const yCoordinate = tergetCoordinate.map((v) => v["y"]);
+      const yCoordinate = tergetCoordinate.map((v) => v.y);
 
       sheetObj = sheetObj.filter((resultItem, index) => {
         return yCoordinate.includes(index + 2);
@@ -487,50 +480,40 @@ export default class SheetDB_ {
             // リレーションの存在を確認
             // リレーション先のobjを取得
             const relationSheetObj = this.getSheetObj(
-              schema[key]["relation"]["sheetName"],
+              schema[key].relation.sheetName,
               relationCount - 1,
               null, // リレーション2層目以降はtarget引数は適応しない。
               dataType
             );
             // リザルトに付与
-            for (let resultItem of sheetObj) {
+            for (const resultItem of sheetObj) {
               resultItem[key] = relationSheetObj.filter((relationObj) => {
                 // リレーション元のkeyのvalueが配列[SET型][enumList型]
                 if (
-                  Array.isArray(
-                    resultItem[schema[key]["relation"]["references"]]
-                  )
+                  Array.isArray(resultItem[schema[key].relation.references])
                 ) {
                   if (
-                    relationObj[schema[key]["relation"]["sheetKey"]] &&
-                    resultItem[schema[key]["relation"]["references"]]
+                    relationObj[schema[key].relation.sheetKey] &&
+                    resultItem[schema[key].relation.references]
                   ) {
                     // null以外の場合
 
-                    return resultItem[
-                      schema[key]["relation"]["references"]
-                    ].includes(
-                      relationObj[schema[key]["relation"]["sheetKey"]]
+                    return resultItem[schema[key].relation.references].includes(
+                      relationObj[schema[key].relation.sheetKey]
                     );
                   }
                 }
 
                 // リレーション先のkeyのvalueが配列[SET型][enumList型]
-                if (
-                  Array.isArray(
-                    relationObj[schema[key]["relation"]["sheetKey"]]
-                  )
-                ) {
+                if (Array.isArray(relationObj[schema[key].relation.sheetKey])) {
                   if (
-                    relationObj[schema[key]["relation"]["sheetKey"]] &&
-                    resultItem[schema[key]["relation"]["references"]]
+                    relationObj[schema[key].relation.sheetKey] &&
+                    resultItem[schema[key].relation.references]
                   ) {
                     // null以外の場合
 
-                    return relationObj[
-                      schema[key]["relation"]["sheetKey"]
-                    ].includes(
-                      resultItem[schema[key]["relation"]["references"]]
+                    return relationObj[schema[key].relation.sheetKey].includes(
+                      resultItem[schema[key].relation.references]
                     );
                   }
                 }
@@ -538,8 +521,8 @@ export default class SheetDB_ {
                 // リレーション先のkeyのvalueが文字列(object[SET型]以外)の場合は型を含めた完全一致で定義する。
 
                 return (
-                  relationObj[schema[key]["relation"]["sheetKey"]] ===
-                  resultItem[schema[key]["relation"]["references"]]
+                  relationObj[schema[key].relation.sheetKey] ===
+                  resultItem[schema[key].relation.references]
                 );
               });
             }
@@ -570,7 +553,7 @@ export default class SheetDB_ {
     // ↓ １行目の値を配列を文字型で取得。
     const xKeyList = this.getSheetValues(latestSheetName)[0].map(String);
 
-    let result = []; // 結果を初期化
+    const result = []; // 結果を初期化
     let count = 1; // 初期値
 
     // ↓ 取得した値からxKeyは何番目にあるかを計算
@@ -600,12 +583,12 @@ export default class SheetDB_ {
 
     // ↓ false、0、NaN、null、""でy座標を探す場合も考えられるのでこの書き方。
     if (value === undefined) {
-      throw `valueが空白です!!`;
+      throw "valueが空白です!!";
     }
     // シートを取得
     const sheetObj = this.getSheetObj(latestSheetName);
 
-    let result = {}; // 結果の初期化
+    const result = {}; // 結果の初期化
 
     for (const x of this.getXCoordinate(latestSheetName, xKey)) {
       // xキー番号を繰り返す
@@ -648,9 +631,9 @@ export default class SheetDB_ {
           //両方をともNaNだった場合
         } else if (
           typeof sheetObjItem[xKey] === "number" &&
-          isNaN(sheetObjItem[xKey]) &&
+          Number.isNaN(sheetObjItem[xKey]) &&
           typeof value === "number" &&
-          isNaN(value)
+          Number.isNaN(value)
         ) {
           result[x].push(count);
 
@@ -721,7 +704,7 @@ export default class SheetDB_ {
           // X軸を繰り返す
           // xの値を削除する必要性があるかどうかの確認
           if (!shouldRemoveX) {
-            if (cache[0]["x"] !== x) {
+            if (cache[0].x !== x) {
               shouldRemoveX = true;
             }
           }
@@ -729,7 +712,7 @@ export default class SheetDB_ {
             // y軸を繰り返す
             for (const cacheItem of cache) {
               // キャッシュを繰り返す
-              if (cacheItem["y"] === y) {
+              if (cacheItem.y === y) {
                 const obj = { x: x, y: y };
                 result.push(obj);
               }
@@ -744,9 +727,6 @@ export default class SheetDB_ {
       // xの値を削除
       result = result.map(({ x, ...rest }) => rest);
     }
-
-    // 直近のターゲットとして保存する。
-    this._targetCoordinate = result;
 
     // 結果を返す
     return result;
@@ -767,15 +747,14 @@ export default class SheetDB_ {
       // 自分自身の値の置き換えが可能になるためのセーフティ機能必要
       if (
         newRichTextValue.getText() !=
-        this.getCellValue(latestSheetName, target["y"], target["x"])["values"]
+        this.getCellValue(latestSheetName, target.y, target.x).values
       ) {
         throw "既存の値とsetText()で定義された値が違います。";
-      } else {
-        // 設定
-        this.getSheetByName(latestSheetName)
-          .getRange(target["y"], target["x"])
-          .setRichTextValue(newRichTextValue);
       }
+      // 設定
+      this.getSheetByName(latestSheetName)
+        .getRange(target.y, target.x)
+        .setRichTextValue(newRichTextValue);
     }
   }
 
@@ -792,11 +771,11 @@ export default class SheetDB_ {
     if (targetCoordinate.length === 0) {
       console.error("targetが0です。値の保存は実行されません。");
     }
-    let result = []; // 初期化
+    const result = []; // 初期化
     // 座標のy座標を繰り返す。
     for (const target of targetCoordinate) {
       // 保存を実行
-      result.push(this.setValueDone_(latestSheetName, target["y"], setData));
+      result.push(this.setValueDone_(latestSheetName, target.y, setData));
     }
     return result;
   }
@@ -809,7 +788,7 @@ export default class SheetDB_ {
     const latestSheetName = this.getLatestSheetName(sheetName);
 
     // 値を保存するy座標が定義されていない場合は定義する
-    if (!this._ySetValueAppEndRow.hasOwnProperty(latestSheetName)) {
+    if (!(latestSheetName in this._ySetValueAppEndRow)) {
       // 値を保存するy座標を検出
       this._ySetValueAppEndRow[latestSheetName] =
         this.getSheetValues(latestSheetName).length + 1;
@@ -828,10 +807,10 @@ export default class SheetDB_ {
     response.push(result);
 
     // 値を保存するy座標の値を更新
-    if (result["status"] === "success") {
+    if (result.status === "success") {
       // 保存に成功していた場合
       this._ySetValueAppEndRow[latestSheetName] += 1;
-    } else if (result["status"] === "error") {
+    } else if (result.status === "error") {
       // 保存に失敗していた場合
       // 何もしない
     } else {
@@ -895,7 +874,7 @@ export default class SheetDB_ {
     // 保存を実行していい場合。
     if (setValueDone) {
       // 初期化
-      let result = {
+      const result = {
         status: "success",
         errorMessage: "success",
         value: {},
@@ -906,9 +885,9 @@ export default class SheetDB_ {
         const xs = this.getXCoordinate(latestSheetName, key);
 
         // x座標を繰り返す
-        setValueLoop: for (const x of xs) {
+        for (const x of xs) {
           // すでに保存されている値を定義
-          const oldValue = this.getCellValue(latestSheetName, y, x)["values"];
+          const oldValue = this.getCellValue(latestSheetName, y, x).values;
           let newValue = null;
 
           // 保存を実行
@@ -916,10 +895,10 @@ export default class SheetDB_ {
           if (
             Array.isArray(setData[key]) &&
             key in this.schema[latestSheetName] &&
-            this.schema[latestSheetName][key]["dataType"].match(/enumlist|set/i)
+            this.schema[latestSheetName][key].dataType.match(/enumlist|set/i)
           ) {
             // 重複を許可しない。(set型)
-            if (/set/i.test(this.schema[latestSheetName][key]["dataType"])) {
+            if (/set/i.test(this.schema[latestSheetName][key].dataType)) {
               newValue = Array.from(new Set(setData[key])).join(" , ");
               // 重複を許可(enumlist型)
             } else {
@@ -927,10 +906,9 @@ export default class SheetDB_ {
             }
 
             if (oldValue === newValue) {
-              continue setValueLoop;
-            } else {
-              sheet.getRange(y, x).setValue(newValue);
+              continue;
             }
+            sheet.getRange(y, x).setValue(newValue);
 
             // Bool型の場合
           } else if (typeof setData[key] === "boolean") {
@@ -938,27 +916,24 @@ export default class SheetDB_ {
             newValue = setData[key];
 
             if (oldValue === newValue) {
-              continue setValueLoop;
-            } else {
-              sheet.getRange(y, x).setValue(newValue);
+              continue;
             }
+            sheet.getRange(y, x).setValue(newValue);
 
             //json(obj)の場合
           } else if (typeof setData[key] === "object") {
             newValue = JSON.stringify(setData[key]);
             if (oldValue === newValue) {
-              continue setValueLoop;
-            } else {
-              sheet.getRange(y, x).setValue(newValue);
+              continue;
             }
+            sheet.getRange(y, x).setValue(newValue);
           } else {
             // その他の場合 数値型と文字型を比較することもあるため == である。
             newValue = setData[key];
             if (oldValue == newValue) {
-              continue setValueLoop;
-            } else {
-              sheet.getRange(y, x).setValue(newValue);
+              continue;
             }
+            sheet.getRange(y, x).setValue(newValue);
           }
 
           // ユニークキーをキャッシュに追記
@@ -972,17 +947,16 @@ export default class SheetDB_ {
           }
 
           // retrun result用objの追加
-          result["value"][key] = { oldValue: oldValue, newValue: newValue };
+          result.value[key] = { oldValue: oldValue, newValue: newValue };
         } // xsのforの閉じタグ
       } // setDataのfor閉じタグ
       return result;
-    } else {
-      return {
-        status: "error",
-        errorMessage: errorText,
-        value: {},
-      };
     }
+    return {
+      status: "error",
+      errorMessage: errorText,
+      value: {},
+    };
   }
 
   // ユニークキーを保存する
@@ -998,7 +972,7 @@ export default class SheetDB_ {
         // シートの各keyの定義を繰り返す
         if ("decorator" in schema[key]) {
           // decoratorの存在を確認
-          if (schema[key]["decorator"].includes("unique")) {
+          if (schema[key].decorator.includes("unique")) {
             // decoratorにuniqueが指定されている場合
             // 既存の値をキャッシュにすべて保存する
             this._cacheUniqueKeyValues[latestSheetName] = {}; // 初期化
@@ -1026,7 +1000,7 @@ export default class SheetDB_ {
 
     // 行番号がシートの長さを超えている場合、undefinedを返す
     if (sheetValues.length >= y) {
-      result["values"] = sheetValues[y - 1][x - 1];
+      result.values = sheetValues[y - 1][x - 1];
     }
 
     return result;
@@ -1034,11 +1008,12 @@ export default class SheetDB_ {
 
   // シートを保護するコード
   protectionSheet(sheetNames: string | string[]): void {
+    let arraySheetNames = [];
     if (typeof sheetNames === "string") {
-      sheetNames = [sheetNames];
+      arraySheetNames = [sheetNames];
     }
 
-    for (let sheetName of sheetNames) {
+    for (const sheetName of arraySheetNames) {
       // シート名を履歴から呼び出す。
       const latestSheetName = this.getLatestSheetName(sheetName);
 
@@ -1101,17 +1076,19 @@ export default class SheetDB_ {
   static deepCopy(val: any): any {
     if (typeof val !== "object" || val === null) {
       return val;
-    } else if (["string", "boolean", "number"].includes(typeof val)) {
-      return val;
-    } else if (Array.isArray(val)) {
-      return val.map((item) => SheetDB_.deepCopy(item));
-    } else if (val instanceof Date) {
-      return new Date(val.getTime());
-    } else {
-      return Object.keys(val).reduce((acc, key) => {
-        acc[key] = SheetDB_.deepCopy(val[key]);
-        return acc;
-      }, {});
     }
+    if (["string", "boolean", "number"].includes(typeof val)) {
+      return val;
+    }
+    if (Array.isArray(val)) {
+      return val.map((item) => SheetDB_.deepCopy(item));
+    }
+    if (val instanceof Date) {
+      return new Date(val.getTime());
+    }
+    return Object.keys(val).reduce((acc, key) => {
+      acc[key] = SheetDB_.deepCopy(val[key]);
+      return acc;
+    }, {});
   }
 }
