@@ -45,10 +45,7 @@ export default class SheetDB_ {
   // キャッシュリセット対象
   _spreadSheet: GoogleAppsScript.Spreadsheet.Spreadsheet | null;
   _cacheSheetAllSheet: Record<string, GoogleAppsScript.Spreadsheet.Sheet>;
-  _cacheSheetValuesAllSheet: Record<
-    string,
-    Record<string, string | number>[][]
-  >;
+  _cacheSheetValuesAllSheet: Record<string, string | number[][]>;
   _cacheSheetObj: Record<string, Record<string, SheetAllValueDataType>[]>;
   _ySetValueAppEndRow: Record<string, number>;
   _cacheUniqueKeyDone: string[];
