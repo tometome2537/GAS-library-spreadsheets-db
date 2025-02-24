@@ -41,7 +41,7 @@ class SheetDB_ {
     this._cacheSheetObj = {};
 
     // 保存するy座標のキャッシュ 繰り返し処理でこの関数を使用すると同じy座標の位置に値が保存されるのを防止するため。
-    this._ySetValueAppEndRow = null;
+    this._ySetValueAppEndRow = {};
 
     // ↓ ユニークキーのチェックをしたシートの名前が入る配列
     this._cacheUniqueKeyDone = [];
@@ -733,22 +733,22 @@ class SheetDB_ {
   }
   // 値の保存(行の一番下)
   setValueAppEndRow(sheetName, setData) {
+
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
 
     // 値を保存するy座標が定義されていない場合は定義する
-    if (!this._ySetValueAppEndRow) {
+    if (!this._ySetValueAppEndRow.hasOwnProperty(latestSheetName)) {
       // 値を保存するy座標を検出
-      this._ySetValueAppEndRow =
+      this._ySetValueAppEndRow[latestSheetName] =
         this.getSheetValues(latestSheetName).length + 1;
     }
 
-
     // レスポンスを初期化
     const response = [];
-
+    
     // 保存を実行
-    const result = this.setValueDone_(latestSheetName, this._ySetValueAppEndRow, setData)
+    const result = this.setValueDone_(latestSheetName, this._ySetValueAppEndRow[latestSheetName], setData)
 
     response.push(
       result
@@ -757,7 +757,7 @@ class SheetDB_ {
     // 値を保存するy座標の値を更新
     if (result["status"] === "success") {
       // 保存に成功していた場合
-      this._ySetValueAppEndRow += 1;
+      this._ySetValueAppEndRow[latestSheetName] += 1;
     } else if (result["status"] === "error") {
       // 保存に失敗していた場合
       // 何もしない
