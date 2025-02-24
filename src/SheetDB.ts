@@ -7,9 +7,17 @@ enum DataType {
   JSON = "json",
   BOOL = "bool",
   DATE = "date",
-  ENUM_LIST = "enumlist",
+  ENUM = "enum",
   SET = "set",
 }
+type SheetAllValueDataType =
+  | string
+  | number
+  | boolean
+  | Date
+  | string[]
+  | object
+  | null;
 type Decorator = "unique";
 
 type Schema = {
@@ -37,11 +45,17 @@ export default class SheetDB_ {
   // キャッシュリセット対象
   _spreadSheet: GoogleAppsScript.Spreadsheet.Spreadsheet | null;
   _cacheSheetAllSheet: Record<string, GoogleAppsScript.Spreadsheet.Sheet>;
-  _cacheSheetValuesAllSheet: Record<string, any[]>;
-  _cacheSheetObj: Record<string, any[]>;
+  _cacheSheetValuesAllSheet: Record<
+    string,
+    Record<string, string | number>[][]
+  >;
+  _cacheSheetObj: Record<string, Record<string, SheetAllValueDataType>[]>;
   _ySetValueAppEndRow: Record<string, number>;
   _cacheUniqueKeyDone: string[];
-  _cacheUniqueKeyValues: Record<string, Record<string, any[]>>;
+  _cacheUniqueKeyValues: Record<
+    string,
+    Record<string, SheetAllValueDataType[]>
+  >;
   // コンストラクタ
   constructor(spreadSheetId: string | null) {
     // スプシID初期値
@@ -260,7 +274,7 @@ export default class SheetDB_ {
   }
 
   // シートの値①(関数の結果)を読み込む
-  getSheetValues(sheetName: string): any[] {
+  getSheetValues(sheetName: string): string[][] | number[][] {
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
 
@@ -275,17 +289,21 @@ export default class SheetDB_ {
       this._cacheSheetValuesAllSheet[latestSheetName] = sheetValues; // キャッシュに保存
       result = sheetValues;
     }
-    return SheetDB_.deepCopy(result);
+    const r = SheetDB_.deepCopy(result);
+    if (Array.isArray(r)) {
+      return r;
+    }
+    throw "値が配列ではありません。";
   }
   // シートの値②(元の関数)を読み込む ※ 関数のみ取得。関数でないセルは ""(空白)で取得される。 (例 =sum() )
-  getSheetFormulas(sheetName: string): any[] {
+  getSheetFormulas(sheetName: string): string[][] {
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
 
     return this.getSheetByName(latestSheetName).getDataRange().getFormulas();
   }
   // シートの値③(ディスプレイの表示される値) 0.01ではなく1%で取得される。すべて文字型で出力される。
-  getSheetDisplayValues(sheetName: string): any[] {
+  getSheetDisplayValues(sheetName: string): string[][] {
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
 
@@ -294,7 +312,9 @@ export default class SheetDB_ {
       .getDisplayValues();
   }
   // シートの値④(リッチテキスト)(フォント、文字色、太さ etc...)
-  getSheetRichTextValues(sheetName: string): any[] {
+  getSheetRichTextValues(
+    sheetName: string
+  ): GoogleAppsScript.Spreadsheet.RichTextValue[][] {
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
 
@@ -316,7 +336,7 @@ export default class SheetDB_ {
     relationCount: number | undefined = undefined,
     targets: Record<string, string> | undefined = undefined,
     dataType: "schema" | "string" | "values" | undefined = undefined
-  ): any[] {
+  ): SheetAllValueDataType[] {
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
     // レスポンスする関数
@@ -380,7 +400,7 @@ export default class SheetDB_ {
                 }
               }
               // Bool型の場合
-              if (schema[key].dataType.match(/bool|boolen|boolean/i)) {
+              if (schema[key].dataType.match(/bool|boolean/i)) {
                 if (item[key] === null || item[key] === "") {
                   item[key] = null;
                 } else if (/^(true|yes|1)$/i.test(item[key])) {
@@ -400,7 +420,7 @@ export default class SheetDB_ {
                 }
               }
               // enumList(重複が許される)の場合
-              if (schema[key].dataType.match(/enumlist|set/i)) {
+              if (schema[key].dataType.match(/enum|set/i)) {
                 if (typeof item[key] === "string" && item[key].length >= 1) {
                   item[key] = item[key].split(/ , |,| ,|, /).filter((v) => v);
                   // Set型(重複が許されない)
@@ -453,13 +473,13 @@ export default class SheetDB_ {
     // ターゲットが設定されている。
     if (targets) {
       // 座標を取得
-      const tergetCoordinate = this.getTargetCoordinate(
+      const targetCoordinate = this.getTargetCoordinate(
         latestSheetName,
         targets
       );
 
       // yの値のみを配列にする。
-      const yCoordinate = tergetCoordinate.map((v) => v.y);
+      const yCoordinate = targetCoordinate.map((v) => v.y);
 
       sheetObj = sheetObj.filter((resultItem, index) => {
         return yCoordinate.includes(index + 2);
@@ -537,7 +557,11 @@ export default class SheetDB_ {
     }
 
     // レスポンス
-    return SheetDB_.deepCopy(sheetObj);
+    const r = SheetDB_.deepCopy(sheetObj);
+    if (Array.isArray(r)) {
+      return r;
+    }
+    throw "値が配列ではありません。";
   }
 
   // X軸を調べる
@@ -746,8 +770,8 @@ export default class SheetDB_ {
     for (const target of targetCoordinate) {
       // 自分自身の値の置き換えが可能になるためのセーフティ機能必要
       if (
-        newRichTextValue.getText() !=
-        this.getCellValue(latestSheetName, target.y, target.x).values
+        newRichTextValue.getText() !==
+        String(this.getCellValue(latestSheetName, target.y, target.x).values)
       ) {
         throw "既存の値とsetText()で定義された値が違います。";
       }
@@ -763,7 +787,7 @@ export default class SheetDB_ {
     sheetName: string,
     targets,
     setData
-  ): Record<"status" | "errorMessage" | "value", any>[] {
+  ): Record<"status" | "errorMessage" | "value", SheetAllValueDataType>[] {
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
     // targetを定義
@@ -783,7 +807,7 @@ export default class SheetDB_ {
   setValueAppEndRow(
     sheetName: string,
     setData
-  ): Record<"status" | "errorMessage" | "value", any>[] {
+  ): Record<"status" | "errorMessage" | "value", SheetAllValueDataType>[] {
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
 
@@ -824,8 +848,8 @@ export default class SheetDB_ {
   setValueDone_(
     sheetName: string,
     y: number,
-    setData: Record<string, any>
-  ): Record<"status" | "errorMessage" | "value", any> {
+    setData: Record<string, SheetAllValueDataType>
+  ): Record<"status" | "errorMessage" | "value", SheetAllValueDataType> {
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
 
@@ -891,16 +915,16 @@ export default class SheetDB_ {
           let newValue = null;
 
           // 保存を実行
-          // SET型またはenumlist型に指定されている場合。
+          // SET型またはenum型に指定されている場合。
           if (
             Array.isArray(setData[key]) &&
             key in this.schema[latestSheetName] &&
-            this.schema[latestSheetName][key].dataType.match(/enumlist|set/i)
+            this.schema[latestSheetName][key].dataType.match(/enum|set/i)
           ) {
             // 重複を許可しない。(set型)
             if (/set/i.test(this.schema[latestSheetName][key].dataType)) {
               newValue = Array.from(new Set(setData[key])).join(" , ");
-              // 重複を許可(enumlist型)
+              // 重複を許可(enum型)
             } else {
               newValue = setData[key].join(" , ");
             }
@@ -913,7 +937,7 @@ export default class SheetDB_ {
             // Bool型の場合
           } else if (typeof setData[key] === "boolean") {
             // 新しい値を文字列
-            newValue = setData[key];
+            newValue = String(setData[key]);
 
             if (oldValue === newValue) {
               continue;
@@ -930,7 +954,7 @@ export default class SheetDB_ {
           } else {
             // その他の場合 数値型と文字型を比較することもあるため == である。
             newValue = setData[key];
-            if (oldValue == newValue) {
+            if (oldValue === newValue || oldValue === String(newValue)) {
               continue;
             }
             sheet.getRange(y, x).setValue(newValue);
@@ -946,7 +970,7 @@ export default class SheetDB_ {
             }
           }
 
-          // retrun result用objの追加
+          // return result用objの追加
           result.value[key] = { oldValue: oldValue, newValue: newValue };
         } // xsのforの閉じタグ
       } // setDataのfor閉じタグ
@@ -988,7 +1012,11 @@ export default class SheetDB_ {
   }
 
   // 特定のセルの値を調べる
-  getCellValue(sheetName: string, y: number, x: number): Record<"values", any> {
+  getCellValue(
+    sheetName: string,
+    y: number,
+    x: number
+  ): Record<"values", string | number> {
     // シート名を履歴から呼び出す。
     const latestSheetName = this.getLatestSheetName(sheetName);
 
@@ -996,7 +1024,7 @@ export default class SheetDB_ {
     const sheetValues = this.getSheetValues(latestSheetName);
 
     // 'values' プロパティを持つオブジェクトとして初期化
-    const result: Record<"values", any> = { values: undefined };
+    const result: Record<"values", string | number> = { values: undefined };
 
     // 行番号がシートの長さを超えている場合、undefinedを返す
     if (sheetValues.length >= y) {
@@ -1043,22 +1071,29 @@ export default class SheetDB_ {
   }
 
   // シートを入れるとobj形式に変換してくれる。
-  static convertArrayToObject(sheetValues: any[][]): any[] {
+  static convertArrayToObject(
+    sheetValues: string[][] | number[][]
+  ): SheetAllValueDataType[] {
     const rows = SheetDB_.deepCopy(sheetValues); // deepCopy
-    const keys = rows.splice(0, 1)[0];
-    return rows.map((row) => {
-      const obj = {};
-      row.map((item, index) => {
-        // 保存されている値が0の場合にfalse判定になりnullが出力されてしまうのでString(item) === ""の記述で判定を行っている。
-        // obj[String(keys[index])] = String(item) === "" ? null : String(item);
-        // すべての値を文字型にして出力する方が関数としての役割。JavaScript上では扱いやすい。
-        obj[String(keys[index])] = item;
+    if (Array.isArray(rows)) {
+      const keys = rows.splice(0, 1)[0];
+      return rows.map((row) => {
+        const obj = {};
+        row.map((item, index) => {
+          // 保存されている値が0の場合にfalse判定になりnullが出力されてしまうのでString(item) === ""の記述で判定を行っている。
+          // obj[String(keys[index])] = String(item) === "" ? null : String(item);
+          // すべての値を文字型にして出力する方が関数としての役割。JavaScript上では扱いやすい。
+          obj[String(keys[index])] = item;
+        });
+        return obj;
       });
-      return obj;
-    });
+    }
+    throw "sheetValuesが配列ではありません。";
   }
   // シートを入れるとobj形式に変換してくれる。値はすべて文字型に変換。
-  static convertArrayToObjectString(sheetValues: any[][]): any[] {
+  static convertArrayToObjectString(
+    sheetValues: SheetAllValueDataType[][]
+  ): SheetAllValueDataType[] {
     const rows = [...sheetValues]; // deepCopy
     const keys = rows.splice(0, 1)[0];
     return rows.map((row) => {
@@ -1073,7 +1108,9 @@ export default class SheetDB_ {
     });
   }
 
-  static deepCopy(val: any): any {
+  static deepCopy(
+    val: object | string | boolean | number | [] | Date
+  ): object | string | boolean | number | [] | Date {
     if (typeof val !== "object" || val === null) {
       return val;
     }
