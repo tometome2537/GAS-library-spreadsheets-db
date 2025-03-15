@@ -574,6 +574,11 @@ export default class SheetDB_ {
 
     // y座標を繰り返す
     for (let i = 0; i < targetCounts; i++) {
+      // シートをロックする
+      if (!this._protectionSheetNames.includes(latestSheetName)) {
+        this.protectionSheet(latestSheetName);
+      }
+
       // ターゲット座標を取得
       const targetCoordinateItem = this.getTargetCoordinate(
         latestSheetName,
