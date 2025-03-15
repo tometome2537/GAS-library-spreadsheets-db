@@ -561,6 +561,33 @@ export default class SheetDB_ {
     throw "値が配列ではありません。";
   }
 
+  // 行を削除する。
+  deleteRow(sheetName: string, targets: Record<string, string>): void {
+    // シート名を履歴から呼び出す。
+    const latestSheetName: string = this.getLatestSheetName(sheetName); // シートを取得
+
+    // ターゲット座標の個数を取得
+    const targetCounts: number = this.getTargetCoordinate(
+      latestSheetName,
+      targets
+    ).length;
+
+    // y座標を繰り返す
+    for (let i = 0; i < targetCounts; i++) {
+      // ターゲット座標を取得
+      const targetCoordinateItem = this.getTargetCoordinate(
+        latestSheetName,
+        targets
+      );
+
+      const y = targetCoordinateItem[0].y;
+      // console.log(`削除する行${y}`);
+      this.getSheetByName(latestSheetName).deleteRow(y);
+
+      // キャッシュリセット
+      this.cacheReset();
+    }
+  }
   // X軸を調べる
   getXCoordinate(sheetName: string, xKey: string): number[] {
     // シート名を履歴から呼び出す。
